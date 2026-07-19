@@ -1,0 +1,12 @@
+CompileFlags:
+  CompilationDatabase: build/debug
+  Compiler: clang++-22
+  Add:
+    - -std=c++26
+
+Index:
+  Background: Build
+
+Diagnostics:
+  ClangTidy:
+    Add: []
