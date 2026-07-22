@@ -35,6 +35,14 @@ export namespace motion {
     InvalidWorldPoint
   };
 
+  /*
+  TODO:
+  CellCountOverflow should prolly be changed to a different name, not technically an overflow, more so storage
+  Add geometry access, like get height etc...
+  Start to implement tests
+  std::bad_alloc? think how to solve this
+  */
+
   class OccupancyGrid final {
   public:
     [[nodiscard]]
@@ -55,7 +63,7 @@ export namespace motion {
 
       const auto maxX{origin.x + static_cast<double>(width) * resolution};
       const auto maxY{origin.y + static_cast<double>(height) * resolution};
-      if (!std::isfinite(maxX) || !std::isfinite(maxY)) {
+      if (!std::isfinite(maxX) || !std::isfinite(maxY) || maxX <= origin.x || maxY <= origin.y) {
         return std::unexpected{GridError::InvalidExtent};
       }
 
