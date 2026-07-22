@@ -1,10 +1,10 @@
 export module motion;
 
-export import motion.geometry;
-export import motion.graph;
+//export import motion.geometry;
+//export import motion.graph;
 export import motion.grid;
-export import motion.path;
-export import motion.planning;
+//export import motion.path;
+//export import motion.planning;
 
 export namespace motion {
 
