@@ -1,6 +1,10 @@
 CompileFlags:
   CompilationDatabase: build/debug
   Compiler: clang++-22
+  Remove:
+    - -fmodules-ts
+    - -fmodule-mapper=*
+    - -fdeps-format=*
   Add:
     - -std=c++26
 
