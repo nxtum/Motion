@@ -4,39 +4,19 @@ module;
 #include <cstdint>
 #include <expected>
 #include <vector>
+#include <limits>
 
 export module motion.grid;
 export namespace motion {
 
-  /*
-  Grid coordinates:
-  - signed ints, origins at bottom left
-
-  World coorindates:
-  - floating point, measured in metres, cartesian system, origin defined by the
-  grid
-
-  GridCell:
-  - identifies a discrete cell
-  - does not mean centre or corner
-
-  Grid to world:
-  - returns the centre of the cell by default
-
-  World to grid:
-  - uses floor
-  - fails when outside grid
-  - never silently clamps
-
-  */
   struct GridCell {
-    std::int32_t _x;
-    std::int32_t _y;
+    std::int32_t x;
+    std::int32_t y;
   };
 
   struct WorldPoint {
-    std::double_t _x;
-    std::double_t _y;
+    double x;
+    double y;
   };
 
   enum class CellState : std::uint8_t { 
@@ -46,98 +26,111 @@ export namespace motion {
   };
 
   enum class GridError : std::uint8_t {
-    None,
     InvalidDimensions,
     InvalidResolution,
     InvalidOrigin,
+    InvalidExtent,
     CellCountOverflow,
-    OutOfBounds
+    OutOfBounds,
+    InvalidWorldPoint
   };
 
   class OccupancyGrid final {
   public:
-    using Cells = std::vector<CellState>;
-
     [[nodiscard]]
     static auto Create(std::uint32_t width, std::uint32_t height, double resolution, WorldPoint origin) -> std::expected<OccupancyGrid, GridError> {
- 
-      GridError error{GridError::None};
+      constexpr auto maximumCoordinate{static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max())};
+
+      if (width == 0 || height == 0 || width > maximumCoordinate || height > maximumCoordinate) {
+        return std::unexpected{GridError::InvalidDimensions};
+      }
+
+      if (!std::isfinite(resolution) || resolution <= 0.0) {
+        return std::unexpected{GridError::InvalidResolution};
+      }
+
+      if (!std::isfinite(origin.x) || !std::isfinite(origin.y)) {
+        return std::unexpected{GridError::InvalidOrigin};
+      }
+
+      const auto maxX{origin.x + static_cast<double>(width) * resolution};
+      const auto maxY{origin.y + static_cast<double>(height) * resolution};
+      if (!std::isfinite(maxX) || !std::isfinite(maxY)) {
+        return std::unexpected{GridError::InvalidExtent};
+      }
+
       const auto cellCount{static_cast<std::uint64_t>(width) * static_cast<std::uint64_t>(height)};
-
-      if (width == 0 || height == 0) {
-        error = GridError::InvalidDimensions;
-      } else if (!std::isfinite(resolution) || resolution <= 0.0) {
-        error = GridError::InvalidResolution;
-      } else if (!std::isfinite(origin._x) || !std::isfinite(origin._y)) {
-        error = GridError::InvalidOrigin;
-      } else if (cellCount > std::vector<CellState>{}.max_size()) {
-        error = GridError::CellCountOverflow;
+      if (cellCount > Cells{}.max_size()) {
+        return std::unexpected{GridError::CellCountOverflow};
       }
-      return error == GridError::None ? std::expected<OccupancyGrid, GridError>
-        {OccupancyGrid{ width, height, resolution, origin, static_cast<std::size_t>(cellCount)}} : std::unexpected{error};
+      return OccupancyGrid{width, height, resolution, origin, static_cast<std::size_t>(cellCount)};
     }
 
     [[nodiscard]]
-    auto GetCellCentre(const GridCell &gridCell) const -> std::expected<WorldPoint, GridError> {
-      /*
-      origin = (-25.0, -10.0)
-      resolution = 0.5 m
-      width = 100
-      */
-      GridError error{GridError::None};
-      return std::unexpected{error};
-    }
-
-    [[nodiscard]]
-    auto GetCellState(const GridCell &gridCell) -> std::expected<CellState, GridError> {
-      GridError error{GridError::None};
-      std::size_t index{0};
-
-      if (!Contains(gridCell)) {
-        error = GridError::OutOfBounds;
-      } else {
-        index = StorageIndex(gridCell);
+    auto CellCentre(GridCell cell) const -> std::expected<WorldPoint, GridError> {
+      if (!Contains(cell)) {
+        return std::unexpected{GridError::OutOfBounds};
       }
-      return error == GridError::None ? std::expected<CellState, GridError>{_cells[index]} : std::unexpected{error};
+
+      return WorldPoint{
+        origin_.x + (static_cast<double>(cell.x) + 0.5) * resolution_,
+        origin_.y + (static_cast<double>(cell.y) + 0.5) * resolution_
+      };
     }
 
     [[nodiscard]]
-    auto SetCellState(const GridCell &gridCell, const CellState state) -> std::expected<void, GridError> {
-      GridError error{GridError::None};
-            
-      if (!Contains(gridCell)) {
-        error = GridError::OutOfBounds;
-      } else {
-        const auto index = StorageIndex(gridCell);
-        _cells[index] = state;
+    auto StateAt(GridCell cell) const -> std::expected<CellState, GridError> {
+      if (!Contains(cell)) {
+        return std::unexpected{GridError::OutOfBounds};
       }
-      return error == GridError::None ? std::expected<void, GridError>{} : std::unexpected{error};
+      return cells_[StorageIndex(cell)];
     }
 
     [[nodiscard]]
-    auto WorldToGrid(const WorldPoint &worldPoint) const -> std::expected<GridCell, GridError> { 
-      GridError error{GridError::None};
-      return std::unexpected{error};
+    auto SetState(GridCell cell, CellState state) -> std::expected<void, GridError> {
+      if (!Contains(cell)) {
+        return std::unexpected{GridError::OutOfBounds};
+      }
+      cells_[StorageIndex(cell)] = state;
+      return {};
+    }
+
+    [[nodiscard]]
+    auto WorldToCell(WorldPoint point) const -> std::expected<GridCell, GridError> {
+      const auto gridX{(point.x - origin_.x) / resolution_};
+      const auto gridY{(point.y - origin_.y) / resolution_};
+
+      if (!std::isfinite(gridX) || !std::isfinite(gridY)) {
+        return std::unexpected{GridError::InvalidWorldPoint};
+      }
+
+      if (gridX < 0.0 || gridY < 0.0 || gridX >= static_cast<double>(width_) || gridY >= static_cast<double>(height_)) {
+        return std::unexpected{GridError::OutOfBounds};
+      }
+      return GridCell{static_cast<std::int32_t>(std::floor(gridX)), static_cast<std::int32_t>(std::floor(gridY))};
+    }
+
+    [[nodiscard]]
+    auto Contains(GridCell cell) const noexcept -> bool {
+      return cell.x >= 0 && cell.y >= 0 && static_cast<std::uint32_t>(cell.x) < width_ && static_cast<std::uint32_t>(cell.y) < height_;
     }
 
   private:
-    OccupancyGrid(std::uint32_t width, std::uint32_t height, std::double_t resolution, WorldPoint origin, std::size_t cells)
-      : _width(width), _height(height), _resolution(resolution), _origin(origin), _cells(cells, CellState::Unknown) {}
+    using Cells = std::vector<CellState>;
 
+    OccupancyGrid(std::uint32_t width, std::uint32_t height, double resolution, WorldPoint origin, std::size_t cellCount)
+      : width_(width), height_(height), resolution_(resolution), origin_(origin), cells_(cellCount, CellState::Unknown) {}
+
+    // Precondition: Contains(cell)
     [[nodiscard]]
-    auto StorageIndex(const GridCell &cell) const -> std::size_t {
-      return static_cast<std::size_t>(cell._y) * _width + static_cast<std::size_t>(cell._x);
+    auto StorageIndex(GridCell cell) const noexcept -> std::size_t {
+      return static_cast<std::size_t>(cell.y) * static_cast<std::size_t>(width_) + static_cast<std::size_t>(cell.x);
     }
 
-    [[nodiscard]]
-    auto Contains(const GridCell& cell) const -> bool {
-    return cell._x >= 0 && cell._y >= 0 && static_cast<std::uint32_t>(cell._x) < _width && static_cast<std::uint32_t>(cell._y) < _height;
-    }
-
-    std::uint32_t _width;
-    std::uint32_t _height;
-    std::double_t _resolution;
-    WorldPoint _origin;
-    Cells _cells;
+    std::uint32_t width_;
+    std::uint32_t height_;
+    double resolution_;
+    WorldPoint origin_;
+    Cells cells_;
   };
 } // namespace motion
