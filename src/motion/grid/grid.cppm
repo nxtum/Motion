@@ -30,15 +30,13 @@ export namespace motion {
     InvalidResolution,
     InvalidOrigin,
     InvalidExtent,
-    CellCountOverflow,
+    GridTooLarge,
     OutOfBounds,
     InvalidWorldPoint
   };
 
   /*
   TODO:
-  CellCountOverflow should prolly be changed to a different name, not technically an overflow, more so storage
-  Add geometry access, like get height etc...
   Start to implement tests
   std::bad_alloc? think how to solve this
   */
@@ -69,10 +67,22 @@ export namespace motion {
 
       const auto cellCount{static_cast<std::uint64_t>(width) * static_cast<std::uint64_t>(height)};
       if (cellCount > Cells{}.max_size()) {
-        return std::unexpected{GridError::CellCountOverflow};
+        return std::unexpected{GridError::GridTooLarge};
       }
       return OccupancyGrid{width, height, resolution, origin, static_cast<std::size_t>(cellCount)};
     }
+
+    [[nodiscard]]
+    constexpr auto Width() const noexcept -> std::uint32_t {return width_;}
+
+    [[nodiscard]]
+    constexpr auto Height() const noexcept -> std::uint32_t {return height_;}
+
+    [[nodiscard]]
+    constexpr auto Resolution() const noexcept -> double {return resolution_;}
+
+    [[nodiscard]]
+    constexpr auto Origin() const noexcept -> WorldPoint {return origin_;}
 
     [[nodiscard]]
     auto CellCentre(GridCell cell) const -> std::expected<WorldPoint, GridError> {
