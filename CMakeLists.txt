@@ -8,7 +8,7 @@ project(
 )
 
 option(MOTION_BUILD_EXAMPLES "Build Motion examples" ON)
-option(MOTION_BUILD_TESTS "Build Motion tests" OFF)
+option(MOTION_BUILD_TESTS "Build Motion tests" ON)
 
 include(cmake/CompilerWarnings.cmake)
 
@@ -16,4 +16,9 @@ add_subdirectory(src)
 
 if(MOTION_BUILD_EXAMPLES)
     add_subdirectory(examples)
+endif()
+
+if(MOTION_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
 endif()
