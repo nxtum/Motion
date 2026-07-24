@@ -21,7 +21,9 @@ compile_commands.json
 # Tool caches
 .cache/
 .clangd/
-.vscode/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
 .idea/
 
 # Coverage and profiling
